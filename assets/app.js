@@ -19,6 +19,8 @@
       disclaimer: "For informational purposes only. Not investment advice.",
       loadError: "Failed to load data.",
       otherLang: "中文",
+      dragHint: "Drag across the chart to select a range",
+      clearSel: "Clear selection",
       docTitle: "Fear & Greed Index",
     },
     zh: {
@@ -37,6 +39,8 @@
       disclaimer: "仅供参考，不构成投资建议。",
       loadError: "数据加载失败。",
       otherLang: "English",
+      dragHint: "在图表上横向拖拽可选择区间",
+      clearSel: "清除选择",
       docTitle: "恐慌与贪婪指数",
     },
   };
@@ -72,8 +76,22 @@
   // ---------- state ----------
   let rows = [];       // [date, score, ratingIdx]
   let generatedAt = "";
-  let range = RANGE_KEYS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "1y";
+  const CUSTOM_RE = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/;
+  let range = "1y";      // preset key, or "custom"
+  let custom = null;     // [fromIso, toIso] when range === "custom"
   let chart = null;
+
+  function readHash() {
+    const h = decodeURIComponent(location.hash.slice(1));
+    if (RANGE_KEYS.includes(h)) return { range: h, custom: null };
+    const m = h.match(CUSTOM_RE);
+    if (m && m[1] < m[2]) return { range: "custom", custom: [m[1], m[2]] };
+    return null;
+  }
+  {
+    const h = readHash();
+    if (h) ({ range, custom } = h);
+  }
 
   const $ = (id) => document.getElementById(id);
   const fmt = (v) => v.toFixed(1);
@@ -102,6 +120,24 @@
   }
 
   // ---------- range ----------
+  function localIso(ms) {
+    const d = new Date(ms);
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+
+  function sliceBetween(from, to) {
+    return rows.filter((r) => r[0] >= from && r[0] <= to);
+  }
+
+  function currentSlice() {
+    if (range === "custom" && custom) {
+      const s = sliceBetween(custom[0], custom[1]);
+      if (s.length >= 2) return s;
+    }
+    return sliceForRange(range === "custom" ? "1y" : range);
+  }
+
   function sliceForRange(key) {
     if (key === "all" || !rows.length) return rows;
     const last = new Date(rows[rows.length - 1][0] + "T00:00:00Z");
@@ -133,6 +169,18 @@
       b.addEventListener("click", () => setRange(k));
       nav.appendChild(b);
     });
+    if (range === "custom" && custom) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "custom-chip";
+      chip.setAttribute("aria-pressed", "true");
+      chip.title = t.clearSel;
+      chip.setAttribute("aria-label", `${custom[0]} – ${custom[1]}. ${t.clearSel}`);
+      chip.innerHTML = `<span>${custom[0]} → ${custom[1]}</span><b aria-hidden="true">×</b>`;
+      chip.addEventListener("click", clearCustom);
+      nav.appendChild(chip);
+    }
+    $("hint").textContent = t.dragHint;
 
     const c = colors();
     $("legend").innerHTML = BANDS.map(
@@ -237,27 +285,81 @@
           },
         },
       ],
+      brush: {
+        xAxisIndex: 0,
+        brushType: "lineX",
+        brushMode: "single",
+        transformable: false,
+        throttleType: "debounce",
+        brushStyle: { color: hexToRgba(c.line, 0.18), borderColor: hexToRgba(c.line, 0.7), borderWidth: 1 },
+        outOfBrush: { colorAlpha: 1 },
+      },
+      toolbox: { show: false, feature: { brush: { type: ["lineX"] } } },
     };
-    chart.setOption(option, true);
+    // Merge (not replace) so the tooltip DOM survives re-renders; series and bands are replaced.
+    chart.setOption(option, { replaceMerge: ["series"] });
+    // Keep drag-to-select always on (no toolbox button needed).
+    chart.dispatchAction({
+      type: "takeGlobalCursor",
+      key: "brush",
+      brushOption: { brushType: "lineX", brushMode: "single" },
+    });
+  }
+
+  function onBrushEnd(params) {
+    const area = params.areas && params.areas[0];
+    chart.dispatchAction({ type: "brush", areas: [] }); // remove the drawn band
+    if (!area || !area.coordRange) return;
+    let [a, b] = area.coordRange;
+    if (a > b) [a, b] = [b, a];
+    const sel = sliceBetween(localIso(a), localIso(b));
+    if (sel.length < 2) return; // a click or a tiny drag: ignore
+    // Re-render after ECharts finishes handling this pointer event.
+    chart.dispatchAction({ type: "hideTip" });
+    setTimeout(() => setCustom(sel[0][0], sel[sel.length - 1][0]), 0);
   }
 
   function renderAll() {
     renderStatic();
     renderHeader();
-    const slice = sliceForRange(range);
+    const slice = currentSlice();
     renderStats(slice);
     renderChart(slice);
   }
 
+  let lastPreset = range === "custom" ? "1y" : range;
+
+  function setHash(h) {
+    if (location.hash.slice(1) !== h) history.replaceState(null, "", "#" + h);
+  }
+
   function setRange(k) {
     range = k;
-    if (location.hash.slice(1) !== k) history.replaceState(null, "", "#" + k);
+    custom = null;
+    lastPreset = k;
+    setHash(k);
     renderAll();
+  }
+
+  function setCustom(from, to) {
+    range = "custom";
+    custom = [from, to];
+    setHash(`${from}..${to}`);
+    renderAll();
+  }
+
+  function clearCustom() {
+    setRange(lastPreset);
   }
 
   // ---------- boot ----------
   chart = echarts.init($("chart"), null, { renderer: "canvas" });
+  chart.on("brushEnd", onBrushEnd);
   renderStatic();
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && range === "custom") clearCustom();
+  });
 
   $("lang-toggle").addEventListener("click", () => {
     lang = lang === "zh" ? "en" : "zh";
@@ -267,8 +369,13 @@
   });
 
   window.addEventListener("hashchange", () => {
-    const k = location.hash.slice(1);
-    if (RANGE_KEYS.includes(k) && k !== range) setRange(k);
+    const h = readHash();
+    if (!h) return;
+    if (h.range === "custom") {
+      if (!custom || h.custom[0] !== custom[0] || h.custom[1] !== custom[1]) setCustom(h.custom[0], h.custom[1]);
+    } else if (h.range !== range) {
+      setRange(h.range);
+    }
   });
 
   let resizeTimer = 0;
@@ -276,7 +383,7 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       chart.resize();
-      if (rows.length) renderChart(sliceForRange(range));
+      if (rows.length) renderChart(currentSlice());
     }, 120);
   });
 

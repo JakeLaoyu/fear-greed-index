@@ -15,6 +15,7 @@ An interactive chart of the CNN Fear & Greed Index from 2011 to today, updated a
 
 - Time ranges: 1M, 3M, 6M, 1Y, 2Y, 5Y, 10Y and All (the selected range is kept in the URL hash, e.g. `#2y`, so it can be shared)
 - Stats for the selected range: average, high, low and change
+- Drag across the chart to select any custom range; the chart zooms in and the stats follow. Press ✕ or Esc to go back, and share it as a link like `#2020-02-01..2020-04-30`
 - Colored sentiment bands: Extreme Fear / Fear / Neutral / Greed / Extreme Greed
 - English and Chinese, chosen from the browser language (English by default)
 - Dark and light themes that follow the system, and a layout that works on phones
@@ -54,6 +55,7 @@ CNN 恐慌与贪婪指数（Fear & Greed Index）从 2011 年至今的交互式�
 
 - 时间范围：1 个月、3 个月、6 个月、1 年、2 年、5 年、10 年、全部。选中的范围会写入 URL（如 `#2y`），方便分享
 - 显示所选区间的均值、最高、最低和区间变化
+- 在图表上横向拖拽可选择任意区间，图表会放大到该区间并同步更新统计；点 ✕ 或按 Esc 返回。自定义区间也会写入链接，如 `#2020-02-01..2020-04-30`
 - 五档情绪色带：极度恐慌 / 恐慌 / 中性 / 贪婪 / 极度贪婪
 - 支持中英文，根据浏览器语言自动选择，无法识别时用英文
 - 深色和浅色主题跟随系统，适配手机
