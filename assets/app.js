@@ -178,7 +178,7 @@
     const narrow = window.innerWidth < 720;
     const option = {
       animation: false,
-      grid: { left: narrow ? 34 : 52, right: narrow ? 10 : 20, top: 18, bottom: 34 },
+      grid: { left: narrow ? 34 : 52, right: narrow ? 22 : 32, top: 18, bottom: 34 },
       tooltip: {
         trigger: "axis",
         backgroundColor: c.card,
