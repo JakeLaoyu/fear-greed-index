@@ -490,7 +490,8 @@
   // ---------- analytics ----------
   const BIN = 5;
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  let armed = ""; // touch: the month or year tapped once, waiting for a second tap
+  const ARM_MS = 4000;
+  let armed = null; // touch: { key, at } of the month or year tapped once, waiting for a second tap
 
   const pct = (x) => (x * 100).toFixed(1) + "%";
 
@@ -831,13 +832,15 @@
   }
 
   // Clicking a month or year zooms the main chart to it. On touch the first tap
-  // only shows the tooltip, so reading a value doesn't change the range.
+  // only shows the tooltip, so reading a value doesn't change the range; the
+  // second tap must land on the same cell within ARM_MS.
   function zoomTo(key, from, to) {
-    if (touchMode && armed !== key) {
-      armed = key;
+    const now = Date.now();
+    if (touchMode && (!armed || armed.key !== key || now - armed.at > ARM_MS)) {
+      armed = { key, at: now };
       return;
     }
-    armed = "";
+    armed = null;
     if (sliceBetween(from, to).length < 2) return;
     setCustom(from, to);
     const nav = $("ranges");
@@ -869,6 +872,7 @@
   }
 
   function renderAll() {
+    armed = null; // a range, language or theme change starts over
     renderStatic();
     renderHeader();
     const slice = currentSlice();
