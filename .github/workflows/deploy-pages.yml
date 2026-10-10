@@ -30,6 +30,12 @@ jobs:
         run: |
           mkdir -p _site
           cp -r index.html assets data _site/
+          # Cache-bust app assets so a deploy never mixes new HTML with cached old JS/CSS.
+          v="${GITHUB_SHA::7}"
+          sed -i -e "s#assets/app.js\"#assets/app.js?v=$v\"#" \
+                 -e "s#assets/style.css\"#assets/style.css?v=$v\"#" \
+                 -e "s#assets/vendor/echarts.min.js\"#assets/vendor/echarts.min.js?v=5.5.1\"#" _site/index.html
+          grep -n '?v=' _site/index.html
 
       - uses: actions/configure-pages@v5
 
