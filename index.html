@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fear &amp; Greed Index</title>
+  <meta name="description" content="CNN Fear & Greed Index history since 2011, updated every US trading day.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2311151c'/%3E%3Cpolyline points='5,22 11,14 16,18 21,9 27,13' fill='none' stroke='%239db8e8' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <main class="wrap">
+    <header class="head">
+      <div class="title-block">
+        <h1 data-i18n="title">Fear &amp; Greed Index</h1>
+        <p class="meta" id="meta">&nbsp;</p>
+      </div>
+      <div class="now">
+        <span class="now-value" id="now-value">--</span>
+        <span class="badge" id="now-badge">&nbsp;</span>
+      </div>
+    </header>
+
+    <nav class="ranges" id="ranges" aria-label="Time range"></nav>
+
+    <section class="stats">
+      <div class="stat">
+        <div class="stat-label" data-i18n="mean">Average</div>
+        <div class="stat-value" id="s-mean">--</div>
+        <div class="stat-sub" id="s-mean-sub">&nbsp;</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label" data-i18n="high">High</div>
+        <div class="stat-value" id="s-max">--</div>
+        <div class="stat-sub" id="s-max-sub">&nbsp;</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label" data-i18n="low">Low</div>
+        <div class="stat-value" id="s-min">--</div>
+        <div class="stat-sub" id="s-min-sub">&nbsp;</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label" data-i18n="change">Change</div>
+        <div class="stat-value" id="s-chg">--</div>
+        <div class="stat-sub" id="s-chg-sub">&nbsp;</div>
+      </div>
+    </section>
+
+    <section class="chart-card">
+      <div id="chart" role="img" aria-label="Fear and Greed Index line chart"></div>
+      <ul class="legend" id="legend"></ul>
+    </section>
+
+    <footer class="foot">
+      <span data-i18n="source">Data</span>:
+      <a href="https://www.cnn.com/markets/fear-and-greed" target="_blank" rel="noopener">CNN</a>
+      ·
+      <a href="https://github.com/whit3rabbit/fear-greed-data" target="_blank" rel="noopener">whit3rabbit/fear-greed-data</a>
+      · <span id="updated"></span>
+      · <a href="https://github.com/JakeLaoyu/fear-greed-index" target="_blank" rel="noopener">GitHub</a>
+      · <button type="button" class="lang" id="lang-toggle">中文</button>
+      <p class="disclaimer" data-i18n="disclaimer">For informational purposes only. Not investment advice.</p>
+    </footer>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.1/echarts.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>
