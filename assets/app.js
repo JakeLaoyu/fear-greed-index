@@ -20,6 +20,7 @@
       loadError: "Failed to load data.",
       otherLang: "中文",
       dragHint: "Drag across the chart to select a range",
+      dragHintTouch: "Slide to read values · press and hold, then drag to select a range",
       clearSel: "Clear selection",
       docTitle: "Fear & Greed Index",
     },
@@ -40,6 +41,7 @@
       loadError: "数据加载失败。",
       otherLang: "English",
       dragHint: "在图表上横向拖拽可选择区间",
+      dragHintTouch: "滑动查看数值 · 长按后拖动选择区间",
       clearSel: "清除选择",
       docTitle: "恐慌与贪婪指数",
     },
@@ -80,6 +82,8 @@
   let range = "1y";      // preset key, or "custom"
   let custom = null;     // [fromIso, toIso] when range === "custom"
   let chart = null;
+  const coarseMq = window.matchMedia("(pointer: coarse)");
+  let touchMode = coarseMq.matches;
 
   function readHash() {
     const h = decodeURIComponent(location.hash.slice(1));
@@ -180,7 +184,7 @@
       chip.addEventListener("click", clearCustom);
       nav.appendChild(chip);
     }
-    $("hint").textContent = t.dragHint;
+    $("hint").textContent = touchMode ? t.dragHintTouch : t.dragHint;
 
     const c = colors();
     $("legend").innerHTML = BANDS.map(
@@ -245,6 +249,7 @@
       xAxis: {
         type: "time",
         boundaryGap: false,
+        splitNumber: narrow ? 4 : 8,
         axisLine: { lineStyle: { color: c.border } },
         axisTick: { show: false },
         axisLabel: {
@@ -298,25 +303,122 @@
     };
     // Merge (not replace) so the tooltip DOM survives re-renders; series and bands are replaced.
     chart.setOption(option, { replaceMerge: ["series"] });
-    // Keep drag-to-select always on (no toolbox button needed).
+    applyCursor();
+  }
+
+  // Mouse: dragging always selects (hover already shows values).
+  // Touch: a plain slide reads values; press-and-hold, then drag, selects.
+  function applyCursor() {
     chart.dispatchAction({
       type: "takeGlobalCursor",
       key: "brush",
-      brushOption: { brushType: "lineX", brushMode: "single" },
+      brushOption: touchMode ? { brushType: false } : { brushType: "lineX", brushMode: "single" },
     });
   }
 
-  function onBrushEnd(params) {
-    const area = params.areas && params.areas[0];
-    chart.dispatchAction({ type: "brush", areas: [] }); // remove the drawn band
-    if (!area || !area.coordRange) return;
-    let [a, b] = area.coordRange;
+  function commitSelection(a, b) {
     if (a > b) [a, b] = [b, a];
     const sel = sliceBetween(localIso(a), localIso(b));
     if (sel.length < 2) return; // a click or a tiny drag: ignore
     // Re-render after ECharts finishes handling this pointer event.
     chart.dispatchAction({ type: "hideTip" });
     setTimeout(() => setCustom(sel[0][0], sel[sel.length - 1][0]), 0);
+  }
+
+  // ---------- touch: long-press to select ----------
+  const LONG_PRESS_MS = 380;
+  const MOVE_TOLERANCE = 10;
+  let press = null; // { x0, y0, timer, selecting, a, b }
+
+  function touchPoint(e) {
+    const t0 = e.touches[0] || e.changedTouches[0];
+    const r = $("chart").getBoundingClientRect();
+    return { x: t0.clientX - r.left, y: t0.clientY - r.top };
+  }
+
+  function xToTime(x) {
+    const slice = currentSlice();
+    const lo = new Date(slice[0][0] + "T00:00:00").getTime();
+    const hi = new Date(slice[slice.length - 1][0] + "T00:00:00").getTime();
+    const v = chart.convertFromPixel({ xAxisIndex: 0 }, x);
+    return Math.min(hi, Math.max(lo, v));
+  }
+
+  function drawPress() {
+    const a = Math.min(press.a, press.b);
+    const b = Math.max(press.a, press.b);
+    chart.dispatchAction({
+      type: "brush",
+      areas: [{ brushType: "lineX", xAxisIndex: 0, coordRange: [a, b] }],
+    });
+    $("hint").textContent = `${localIso(a)} → ${localIso(b)}`;
+    $("hint").classList.add("live");
+  }
+
+  function endPress(commit) {
+    if (!press) return;
+    clearTimeout(press.timer);
+    const p = press;
+    press = null;
+    $("chart").classList.remove("selecting");
+    if (!p.selecting) return;
+    chart.dispatchAction({ type: "brush", areas: [] });
+    $("hint").classList.remove("live");
+    $("hint").textContent = t.dragHintTouch;
+    if (commit) commitSelection(p.a, p.b);
+  }
+
+  function initTouch() {
+    const el = $("chart");
+    const opts = { capture: true, passive: false };
+
+    el.addEventListener("touchstart", (e) => {
+      if (!touchMode || !rows.length) return;
+      if (e.touches.length !== 1) { endPress(false); return; }
+      const p = touchPoint(e);
+      press = { x0: p.x, y0: p.y, selecting: false, a: 0, b: 0 };
+      press.timer = setTimeout(() => {
+        if (!press) return;
+        press.selecting = true;
+        press.a = press.b = xToTime(press.x0);
+        el.classList.add("selecting");
+        chart.dispatchAction({ type: "hideTip" });
+        if (navigator.vibrate) navigator.vibrate(12);
+        drawPress();
+      }, LONG_PRESS_MS);
+    }, opts);
+
+    el.addEventListener("touchmove", (e) => {
+      if (!press) return;
+      const p = touchPoint(e);
+      if (!press.selecting) {
+        // Moved before the hold completed: it's a slide (read values) or a scroll.
+        if (Math.hypot(p.x - press.x0, p.y - press.y0) > MOVE_TOLERANCE) endPress(false);
+        return;
+      }
+      // Selecting: keep the page still and keep ECharts' tooltip out of it.
+      e.preventDefault();
+      e.stopPropagation();
+      press.b = xToTime(p.x);
+      drawPress();
+    }, opts);
+
+    const finish = (commit) => (e) => {
+      if (press && press.selecting) e.stopPropagation();
+      endPress(commit);
+    };
+    el.addEventListener("touchend", finish(true), opts);
+    el.addEventListener("touchcancel", finish(false), opts);
+    // Stop the long-press context menu / text callout on Android and iOS.
+    el.addEventListener("contextmenu", (e) => { if (touchMode) e.preventDefault(); });
+  }
+
+  function onBrushEnd(params) {
+    if (touchMode) return; // touch selections are committed by the long-press handler
+    const area = params.areas && params.areas[0];
+    chart.dispatchAction({ type: "brush", areas: [] }); // remove the drawn band
+    if (!area || !area.coordRange) return;
+    commitSelection(area.coordRange[0], area.coordRange[1]);
   }
 
   function renderAll() {
@@ -355,6 +457,14 @@
   // ---------- boot ----------
   chart = echarts.init($("chart"), null, { renderer: "canvas" });
   chart.on("brushEnd", onBrushEnd);
+  initTouch();
+  const onPointerType = () => {
+    touchMode = coarseMq.matches;
+    endPress(false);
+    if (rows.length) renderAll();
+  };
+  if (coarseMq.addEventListener) coarseMq.addEventListener("change", onPointerType);
+  else if (coarseMq.addListener) coarseMq.addListener(onPointerType);
   renderStatic();
 
   document.addEventListener("keydown", (e) => {

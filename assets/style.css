@@ -191,7 +191,22 @@ h1 {
 
 .hint { color: var(--muted); font-size: 13px; opacity: 0.85; }
 
-#chart { cursor: crosshair; }
+#chart {
+  cursor: crosshair;
+  /* Vertical swipes scroll the page; horizontal slides go to the chart. */
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+#chart.selecting { touch-action: none; }
+
+.hint.live {
+  color: var(--text);
+  opacity: 1;
+  font-family: var(--mono);
+}
 
 .ranges .custom-chip {
   display: inline-flex;
