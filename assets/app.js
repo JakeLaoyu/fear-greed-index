@@ -23,6 +23,27 @@
       dragHintTouch: "Slide to read values · press and hold, then drag to select a range",
       clearSel: "Clear selection",
       docTitle: "Fear & Greed Index",
+      zonesTitle: "Time in each zone",
+      distTitle: "Score distribution",
+      heatTitle: "Monthly average",
+      yearsTitle: "By year",
+      yearsNote: "Box: middle 50% of days, line: median, whiskers: low and high.",
+      longest: (n) => `longest run ${n} ${n === 1 ? "day" : "days"}`,
+      streakNow: (z, n) => `In ${z} for ${n} trading ${n === 1 ? "day" : "days"} in a row`,
+      streakEnd: (z, n) => `Ended on a run of ${n} trading ${n === 1 ? "day" : "days"} in ${z}`,
+      pctile: (d, v, p, m) => `${d}: ${v}, higher than ${p}% of trading days in this range · median ${m}`,
+      binDays: (n, p) => `${n} trading days · ${p}`,
+      allHistory: "All history",
+      zoomMonth: "click a month to zoom in",
+      zoomMonthTouch: "tap a month twice to zoom in",
+      zoomYear: "click a year to zoom in",
+      zoomYearTouch: "tap a year twice to zoom in",
+      avg: "Average",
+      median: "Median",
+      mid50: "Middle 50%",
+      hi: "High",
+      lo: "Low",
+      months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
     },
     zh: {
       title: "恐慌与贪婪指数",
@@ -44,6 +65,27 @@
       dragHintTouch: "滑动查看数值 · 长按后拖动选择区间",
       clearSel: "清除选择",
       docTitle: "恐慌与贪婪指数",
+      zonesTitle: "各情绪区间占比",
+      distTitle: "读数分布",
+      heatTitle: "月度均值",
+      yearsTitle: "年度分布",
+      yearsNote: "箱体：中间 50% 的交易日，横线：中位数，须线：最低与最高。",
+      longest: (n) => `最长连续 ${n} 天`,
+      streakNow: (z, n) => `已连续 ${n} 个交易日处于${z}`,
+      streakEnd: (z, n) => `区间结束时已连续 ${n} 个交易日处于${z}`,
+      pctile: (d, v, p, m) => `${d} 读数 ${v}，高于本区间 ${p}% 的交易日 · 中位数 ${m}`,
+      binDays: (n, p) => `${n} 个交易日 · ${p}`,
+      allHistory: "全部历史",
+      zoomMonth: "点击月份可放大查看",
+      zoomMonthTouch: "连点两次月份可放大查看",
+      zoomYear: "点击年份可放大查看",
+      zoomYearTouch: "连点两次年份可放大查看",
+      avg: "均值",
+      median: "中位数",
+      mid50: "中间 50%",
+      hi: "最高",
+      lo: "最低",
+      months: ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"],
     },
   };
 
@@ -82,6 +124,10 @@
   let range = "1y";      // preset key, or "custom"
   let custom = null;     // [fromIso, toIso] when range === "custom"
   let chart = null;
+  let dist = null;       // analytics charts
+  let heat = null;
+  let years = null;
+  let hist = null;       // { months, years } summaries of the full history
   const coarseMq = window.matchMedia("(pointer: coarse)");
   let touchMode = coarseMq.matches;
 
@@ -117,10 +163,28 @@
     };
   }
 
-  function hexToRgba(hex, a) {
+  function hexToRgb(hex) {
     const h = hex.replace("#", "");
     const n = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h, 16);
-    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+
+  function hexToRgba(hex, a) {
+    return `rgba(${hexToRgb(hex).join(",")},${a})`;
+  }
+
+  // Dark or white text, whichever contrasts more with the fill.
+  function ink(hex) {
+    const lin = (v) => (v /= 255) <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    const [r, g, b] = hexToRgb(hex).map(lin);
+    const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return (L + 0.05) / 0.0575 >= 1.05 / (L + 0.05) ? "#11151c" : "#ffffff";
+  }
+
+  function bandOf(v) {
+    let i = BANDS.length - 1;
+    while (i > 0 && v < BANDS[i][0]) i--;
+    return i;
   }
 
   // ---------- range ----------
@@ -187,9 +251,11 @@
     $("hint").textContent = touchMode ? t.dragHintTouch : t.dragHint;
 
     const c = colors();
-    $("legend").innerHTML = BANDS.map(
+    const legend = BANDS.map(
       ([a, b], i) => `<li><i style="background:${c.bands[i]}"></i>${t.ratings[i]} ${a}–${b}</li>`
     ).join("");
+    $("legend").innerHTML = legend;
+    $("heat-legend").innerHTML = legend;
   }
 
   function renderHeader() {
@@ -421,12 +487,394 @@
     commitSelection(area.coordRange[0], area.coordRange[1]);
   }
 
+  // ---------- analytics ----------
+  const BIN = 5;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let armed = ""; // touch: the month or year tapped once, waiting for a second tap
+
+  const pct = (x) => (x * 100).toFixed(1) + "%";
+
+  function quantile(sorted, q) {
+    const pos = (sorted.length - 1) * q;
+    const lo = Math.floor(pos);
+    return sorted[lo] + (sorted[Math.ceil(pos)] - sorted[lo]) * (pos - lo);
+  }
+
+  function summarize(key, list) {
+    let sum = 0;
+    let max = list[0];
+    let min = list[0];
+    for (const r of list) {
+      sum += r[1];
+      if (r[1] > max[1]) max = r;
+      if (r[1] < min[1]) min = r;
+    }
+    const vals = list.map((r) => r[1]).sort((a, b) => a - b);
+    return {
+      key,
+      n: list.length,
+      mean: sum / list.length,
+      min,
+      max,
+      q1: quantile(vals, 0.25),
+      median: quantile(vals, 0.5),
+      q3: quantile(vals, 0.75),
+      from: list[0][0],
+      to: list[list.length - 1][0],
+    };
+  }
+
+  // Rows are sorted by date, so each month or year is one contiguous run.
+  function groupBy(prefixLen) {
+    const out = [];
+    let start = 0;
+    for (let i = 1; i <= rows.length; i++) {
+      const key = rows[start][0].slice(0, prefixLen);
+      if (i === rows.length || rows[i][0].slice(0, prefixLen) !== key) {
+        out.push(summarize(key, rows.slice(start, i)));
+        start = i;
+      }
+    }
+    return out;
+  }
+
+  function overlaps(g, slice) {
+    return slice.length === rows.length || (g.to >= slice[0][0] && g.from <= slice[slice.length - 1][0]);
+  }
+
+  function tipStyle(c) {
+    return {
+      backgroundColor: c.card,
+      borderColor: c.border,
+      textStyle: { color: c.text, fontSize: 13 },
+      confine: true,
+    };
+  }
+
+  // Tooltip body: a heading, the zone of `v`, then label/value rows.
+  function tipBody(c, head, v, lines) {
+    const i = bandOf(v);
+    return `<div style="font-family:var(--mono);color:${c.muted}">${head}</div>` +
+      `<div style="display:flex;align-items:center;gap:6px;margin:4px 0 2px;font-weight:600">` +
+      `<i style="width:10px;height:10px;border-radius:3px;background:${c.bands[i]}"></i>${t.ratings[i]}</div>` +
+      lines.map(([k, val]) =>
+        `<div style="display:flex;justify-content:space-between;gap:18px;margin-top:2px">` +
+        `<span style="color:${c.muted}">${k}</span><span style="font-family:var(--mono)">${val}</span></div>`
+      ).join("");
+  }
+
+  function renderZones(slice) {
+    const c = colors();
+    const n = slice.length;
+    const count = [0, 0, 0, 0, 0];
+    const longest = [0, 0, 0, 0, 0];
+    let run = 0;
+    slice.forEach((r, i) => {
+      run = i && slice[i - 1][2] === r[2] ? run + 1 : 1;
+      count[r[2]]++;
+      if (run > longest[r[2]]) longest[r[2]] = run;
+    });
+    const peak = Math.max(...count);
+    $("zones").innerHTML = count.map((k, i) =>
+      `<li><span class="z-name"><i style="background:${c.bands[i]}"></i>${t.ratings[i]}</span>` +
+      `<span class="z-track"><b style="width:${(k / peak) * 100}%;background:${c.bands[i]}"></b></span>` +
+      `<span class="z-pct">${pct(k / n)}</span>` +
+      `<span class="z-sub">${t.days(k.toLocaleString("en-US"))}${k ? " · " + t.longest(longest[i]) : ""}</span></li>`
+    ).join("");
+
+    // The run the range ends on, counted back through the full history.
+    const end = slice[n - 1];
+    let j = rows.indexOf(end);
+    const atLatest = j === rows.length - 1;
+    let streak = 0;
+    while (j >= 0 && rows[j][2] === end[2]) {
+      streak++;
+      j--;
+    }
+    $("zones-note").textContent = (atLatest ? t.streakNow : t.streakEnd)(t.ratings[end[2]], streak);
+  }
+
+  function renderDist(slice) {
+    const c = colors();
+    const narrow = window.innerWidth < 720;
+    const mono = cssVar("--mono");
+    const n = slice.length;
+    const counts = new Array(100 / BIN).fill(0);
+    for (const r of slice) counts[Math.min(counts.length - 1, Math.floor(r[1] / BIN))]++;
+    const last = slice[n - 1];
+    const below = slice.reduce((k, r) => k + (r[1] < last[1] ? 1 : 0), 0);
+    const median = quantile(slice.map((r) => r[1]).sort((a, b) => a - b), 0.5);
+    $("dist-note").textContent = t.pctile(last[0], fmt(last[1]), Math.round((below / n) * 100), fmt(median));
+
+    dist.setOption({
+      animation: false,
+      grid: { left: narrow ? 38 : 44, right: 14, top: 24, bottom: 26 },
+      tooltip: {
+        ...tipStyle(c),
+        trigger: "item",
+        formatter: (p) => {
+          const [a, b, share, k] = p.value;
+          return tipBody(c, `${a}–${b}`, a, []) +
+            `<div style="margin-top:2px;font-family:var(--mono)">${t.binDays(k.toLocaleString("en-US"), pct(share / 100))}</div>`;
+        },
+      },
+      xAxis: {
+        type: "value",
+        min: 0,
+        max: 100,
+        interval: 25,
+        axisLine: { lineStyle: { color: c.border } },
+        axisTick: { show: false },
+        axisLabel: { color: c.muted, fontSize: narrow ? 11 : 12 },
+        splitLine: { show: false },
+      },
+      yAxis: {
+        type: "value",
+        splitNumber: 3,
+        axisLabel: { color: c.muted, fontSize: narrow ? 11 : 12, formatter: (v) => `${v}%` },
+        splitLine: { lineStyle: { color: c.grid } },
+      },
+      series: [
+        {
+          type: "custom",
+          data: counts.map((k, i) => [i * BIN, (i + 1) * BIN, (k / n) * 100, k]),
+          encode: { x: [0, 1], y: 2 },
+          renderItem: (params, api) => {
+            const cs = params.coordSys;
+            const [x0, top] = api.coord([api.value(0), api.value(2)]);
+            const [x1, base] = api.coord([api.value(1), 0]);
+            const w = Math.max(1, Math.min(24, x1 - x0 - 2)); // 2px gap between bars
+            return {
+              type: "group",
+              children: [
+                // Full-height hit area, so short bars are easy to hover.
+                {
+                  type: "rect",
+                  shape: { x: x0, y: cs.y, width: x1 - x0, height: cs.height },
+                  style: { fill: "rgba(0,0,0,0)" },
+                  emphasis: { style: { fill: hexToRgba(c.muted, 0.14) } },
+                },
+                {
+                  type: "rect",
+                  shape: { x: (x0 + x1 - w) / 2, y: top, width: w, height: base - top, r: [3, 3, 0, 0] },
+                  style: { fill: c.line },
+                },
+              ],
+            };
+          },
+          markArea: {
+            silent: true,
+            data: BANDS.map(([a, b], i) => [
+              { xAxis: a, itemStyle: { color: hexToRgba(c.bands[i], c.bandAlpha) } },
+              { xAxis: b },
+            ]),
+          },
+          markLine: {
+            silent: true,
+            symbol: "none",
+            lineStyle: { color: c.text, width: 1.5, type: "solid" },
+            label: { color: c.text, fontFamily: mono, fontWeight: 600, formatter: fmt(last[1]) },
+            data: [{ xAxis: last[1] }],
+          },
+        },
+      ],
+    }, { replaceMerge: ["series"] });
+  }
+
+  function heatLayout() {
+    const rowH = window.innerWidth < 720 ? 22 : 26;
+    $("heat").style.height = `${hist.years.length * rowH + 28}px`;
+  }
+
+  function renderHeat(slice) {
+    const c = colors();
+    const narrow = window.innerWidth < 720;
+    const mono = cssVar("--mono");
+    const yearKeys = hist.years.map((y) => y.key);
+    const full = slice.length === rows.length;
+    heat.setOption({
+      animation: false,
+      grid: { left: narrow ? 38 : 46, right: 2, top: 24, bottom: 2 },
+      tooltip: {
+        ...tipStyle(c),
+        trigger: "item",
+        formatter: (p) => {
+          const m = hist.months[p.dataIndex];
+          return tipBody(c, m.key, m.mean, [
+            [t.avg, fmt(m.mean)],
+            [t.hi, `${fmt(m.max[1])} · ${m.max[0].slice(5)}`],
+            [t.lo, `${fmt(m.min[1])} · ${m.min[0].slice(5)}`],
+            ["", t.days(m.n)],
+          ]);
+        },
+      },
+      xAxis: {
+        type: "category",
+        position: "top",
+        data: t.months,
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { color: c.muted, fontSize: narrow ? 10 : 12, interval: 0 },
+        splitLine: { show: false },
+      },
+      yAxis: {
+        type: "category",
+        data: yearKeys,
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { color: c.muted, fontSize: narrow ? 11 : 12, fontFamily: mono },
+        splitLine: { show: false },
+      },
+      series: [
+        {
+          type: "custom",
+          data: hist.months.map((m) => [Number(m.key.slice(5)) - 1, yearKeys.indexOf(m.key.slice(0, 4)), m.mean]),
+          encode: { x: 0, y: 1 },
+          renderItem: (params, api) => {
+            const m = hist.months[params.dataIndex];
+            const [cx, cy] = api.coord([api.value(0), api.value(1)]);
+            const [w, h] = api.size([1, 1]);
+            const fill = c.bands[bandOf(m.mean)];
+            // Outline the months in the selected range (all of them for "All" is just noise).
+            const picked = !full && overlaps(m, slice);
+            return {
+              type: "rect",
+              shape: { x: cx - w / 2 + 1, y: cy - h / 2 + 1, width: w - 2, height: h - 2, r: 3 },
+              style: { fill, stroke: picked ? c.text : null, lineWidth: 2 },
+              emphasis: { style: { stroke: c.text, lineWidth: 2 } },
+              textContent: w >= 24 ? {
+                style: { text: String(Math.round(m.mean)), fill: ink(fill), font: `600 ${narrow ? 10 : 12}px ${mono}` },
+              } : undefined,
+              textConfig: { position: "inside" },
+            };
+          },
+        },
+      ],
+    }, { replaceMerge: ["series"] });
+  }
+
+  function renderYears(slice) {
+    const c = colors();
+    const narrow = window.innerWidth < 720;
+    years.setOption({
+      animation: false,
+      grid: { left: narrow ? 34 : 52, right: narrow ? 8 : 16, top: 12, bottom: 28 },
+      tooltip: {
+        ...tipStyle(c),
+        trigger: "axis",
+        axisPointer: { type: "shadow", shadowStyle: { color: hexToRgba(c.muted, 0.14) } },
+        formatter: (ps) => {
+          const y = hist.years[ps[0].dataIndex];
+          return tipBody(c, y.key, y.mean, [
+            [t.avg, fmt(y.mean)],
+            [t.median, fmt(y.median)],
+            [t.mid50, `${fmt(y.q1)}–${fmt(y.q3)}`],
+            [t.hi, `${fmt(y.max[1])} · ${y.max[0].slice(5)}`],
+            [t.lo, `${fmt(y.min[1])} · ${y.min[0].slice(5)}`],
+            ["", t.days(y.n)],
+          ]);
+        },
+      },
+      xAxis: {
+        type: "category",
+        data: hist.years.map((y) => y.key),
+        axisLine: { lineStyle: { color: c.border } },
+        axisTick: { show: false },
+        axisLabel: { color: c.muted, fontSize: narrow ? 11 : 12 },
+      },
+      yAxis: {
+        type: "value",
+        min: 0,
+        max: 100,
+        interval: 25,
+        axisLabel: { color: c.muted, fontSize: narrow ? 11 : 12 },
+        splitLine: { lineStyle: { color: c.grid } },
+      },
+      series: [
+        {
+          type: "boxplot",
+          // Years in the selected range in the accent color, the rest in gray.
+          data: hist.years.map((y) => {
+            const on = overlaps(y, slice);
+            return {
+              value: [y.min[1], y.q1, y.median, y.q3, y.max[1]],
+              itemStyle: on
+                ? { color: hexToRgba(c.line, 0.3), borderColor: c.line }
+                : { color: hexToRgba(c.muted, 0.1), borderColor: hexToRgba(c.muted, 0.55) },
+            };
+          }),
+          boxWidth: [6, 24],
+          itemStyle: { borderWidth: 1.5 },
+          emphasis: { disabled: true },
+          markArea: {
+            silent: true,
+            data: BANDS.map(([a, b], i) => [
+              { yAxis: a, itemStyle: { color: hexToRgba(c.bands[i], c.bandAlpha) } },
+              { yAxis: b },
+            ]),
+          },
+        },
+      ],
+    }, { replaceMerge: ["series"] });
+  }
+
+  function renderAnalytics(slice) {
+    const span = `${slice[0][0]} → ${slice[slice.length - 1][0]}`;
+    $("zones-sub").textContent = span;
+    $("dist-sub").textContent = span;
+    $("heat-sub").textContent = `${t.allHistory} · ${touchMode ? t.zoomMonthTouch : t.zoomMonth}`;
+    $("years-sub").textContent = `${t.allHistory} · ${touchMode ? t.zoomYearTouch : t.zoomYear}`;
+    renderZones(slice);
+    renderDist(slice);
+    renderHeat(slice);
+    renderYears(slice);
+  }
+
+  // Clicking a month or year zooms the main chart to it. On touch the first tap
+  // only shows the tooltip, so reading a value doesn't change the range.
+  function zoomTo(key, from, to) {
+    if (touchMode && armed !== key) {
+      armed = key;
+      return;
+    }
+    armed = "";
+    if (sliceBetween(from, to).length < 2) return;
+    setCustom(from, to);
+    const nav = $("ranges");
+    if (nav.getBoundingClientRect().top < 0) {
+      nav.scrollIntoView({ behavior: reduceMotion.matches ? "auto" : "smooth", block: "start" });
+    }
+  }
+
+  function initAnalytics() {
+    dist = echarts.init($("dist"), null, { renderer: "canvas" });
+    heat = echarts.init($("heat"), null, { renderer: "canvas" });
+    years = echarts.init($("years"), null, { renderer: "canvas" });
+    heat.on("click", (p) => {
+      const m = hist.months[p.dataIndex];
+      zoomTo(m.key, m.from, m.to);
+    });
+    // Anywhere in a year's column counts, not just the box.
+    years.getZr().on("click", (e) => {
+      const at = [e.offsetX, e.offsetY];
+      if (!hist || !years.containPixel("grid", at)) return;
+      const y = hist.years[Math.round(years.convertFromPixel({ xAxisIndex: 0 }, at[0]))];
+      if (y) zoomTo(y.key, y.from, y.to);
+    });
+  }
+
+  function resizeAnalytics() {
+    heatLayout();
+    [dist, heat, years].forEach((ch) => ch.resize());
+  }
+
   function renderAll() {
     renderStatic();
     renderHeader();
     const slice = currentSlice();
     renderStats(slice);
     renderChart(slice);
+    renderAnalytics(slice);
   }
 
   let lastPreset = range === "custom" ? "1y" : range;
@@ -458,6 +906,7 @@
   chart = echarts.init($("chart"), null, { renderer: "canvas" });
   chart.on("brushEnd", onBrushEnd);
   initTouch();
+  initAnalytics();
   const onPointerType = () => {
     touchMode = coarseMq.matches;
     endPress(false);
@@ -493,7 +942,11 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       chart.resize();
-      if (rows.length) renderChart(currentSlice());
+      if (!rows.length) return;
+      resizeAnalytics();
+      const slice = currentSlice();
+      renderChart(slice);
+      renderAnalytics(slice);
     }, 120);
   });
 
@@ -510,6 +963,8 @@
     .then((json) => {
       rows = json.data;
       generatedAt = json.generated_at || "";
+      hist = { months: groupBy(7), years: groupBy(4) };
+      resizeAnalytics();
       renderAll();
     })
     .catch(() => {

@@ -18,6 +18,11 @@ An interactive chart of the CNN Fear & Greed Index from 2011 to today, updated a
 - Drag across the chart to select any custom range; the chart zooms in and the stats follow. Press ✕ or Esc to go back, and share it as a link like `#2020-02-01..2020-04-30`
 - On phones, slide a finger along the chart to read values; press and hold, then drag, to select a range
 - Colored sentiment bands: Extreme Fear / Fear / Neutral / Greed / Extreme Greed
+- Analysis panels under the chart:
+  - **Time in each zone**: share of trading days in each zone for the selected range, the longest run in each, and how long the current run has lasted
+  - **Score distribution**: a histogram of the selected range, with the latest value's percentile and the median
+  - **Monthly average**: a heatmap of every month since 2011, with the selected range outlined; click a month to zoom the chart to it
+  - **By year**: a box plot of each year's readings; click a year to zoom to it
 - English and Chinese, chosen from the browser language (English by default)
 - Dark and light themes that follow the system, and a layout that works on phones
 - A plain static site: no build step, no framework
@@ -59,6 +64,11 @@ CNN 恐慌与贪婪指数（Fear & Greed Index）从 2011 年至今的交互式�
 - 在图表上横向拖拽可选择任意区间，图表会放大到该区间并同步更新统计；点 ✕ 或按 Esc 返回。自定义区间也会写入链接，如 `#2020-02-01..2020-04-30`
 - 手机上：手指滑动查看数值，长按后再拖动选择区间
 - 五档情绪色带：极度恐慌 / 恐慌 / 中性 / 贪婪 / 极度贪婪
+- 图表下方的分析面板：
+  - **各情绪区间占比**：所选区间内每档情绪的交易日占比、最长连续天数，以及当前已连续多少天
+  - **读数分布**：所选区间的读数直方图，并给出最新读数的百分位和中位数
+  - **月度均值**：2011 年以来每个月的热力图，所选区间会被框出；点击某个月可把主图放大到该月
+  - **年度分布**：每年读数的箱线图；点击某一年可放大到该年
 - 支持中英文，根据浏览器语言自动选择，无法识别时用英文
 - 深色和浅色主题跟随系统，适配手机
 - 纯静态页面，无需构建，不依赖前端框架
