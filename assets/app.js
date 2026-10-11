@@ -26,6 +26,7 @@
       zonesTitle: "Time in each zone",
       distTitle: "Score distribution",
       heatTitle: "Monthly average",
+      lowsTitle: "Monthly low",
       yearsTitle: "By year",
       yearsNote: "Box: middle 50% of days, line: median, whiskers: low and high.",
       longest: (n) => `longest run ${n} ${n === 1 ? "day" : "days"}`,
@@ -68,6 +69,7 @@
       zonesTitle: "各情绪区间占比",
       distTitle: "读数分布",
       heatTitle: "月度均值",
+      lowsTitle: "月度最低值",
       yearsTitle: "年度分布",
       yearsNote: "箱体：中间 50% 的交易日，横线：中位数，须线：最低与最高。",
       longest: (n) => `最长连续 ${n} 天`,
@@ -126,6 +128,7 @@
   let chart = null;
   let dist = null;       // analytics charts
   let heat = null;
+  let lows = null;
   let years = null;
   let hist = null;       // { months, years } summaries of the full history
   const coarseMq = window.matchMedia("(pointer: coarse)");
@@ -256,6 +259,7 @@
     ).join("");
     $("legend").innerHTML = legend;
     $("heat-legend").innerHTML = legend;
+    $("lows-legend").innerHTML = legend;
   }
 
   function renderHeader() {
@@ -684,16 +688,21 @@
 
   function heatLayout() {
     const rowH = window.innerWidth < 720 ? 22 : 26;
-    $("heat").style.height = `${hist.years.length * rowH + 28}px`;
+    const h = `${hist.years.length * rowH + 28}px`;
+    $("heat").style.height = h;
+    $("lows").style.height = h;
   }
 
-  function renderHeat(slice) {
+  // Month-by-year heatmap colored by one value per month: its average ("mean")
+  // or its lowest daily reading ("low").
+  function renderHeat(ch, slice, metric) {
     const c = colors();
     const narrow = window.innerWidth < 720;
     const mono = cssVar("--mono");
     const yearKeys = hist.years.map((y) => y.key);
     const full = slice.length === rows.length;
-    heat.setOption({
+    const valueOf = metric === "low" ? (m) => m.min[1] : (m) => m.mean;
+    ch.setOption({
       animation: false,
       grid: { left: narrow ? 38 : 46, right: 2, top: 24, bottom: 2 },
       tooltip: {
@@ -701,12 +710,12 @@
         trigger: "item",
         formatter: (p) => {
           const m = hist.months[p.dataIndex];
-          return tipBody(c, m.key, m.mean, [
-            [t.avg, fmt(m.mean)],
-            [t.hi, `${fmt(m.max[1])} · ${m.max[0].slice(5)}`],
-            [t.lo, `${fmt(m.min[1])} · ${m.min[0].slice(5)}`],
-            ["", t.days(m.n)],
-          ]);
+          const avg = [t.avg, fmt(m.mean)];
+          const hi = [t.hi, `${fmt(m.max[1])} · ${m.max[0].slice(5)}`];
+          const lo = [t.lo, `${fmt(m.min[1])} · ${m.min[0].slice(5)}`];
+          // The value the cell is colored by comes first.
+          const lines = metric === "low" ? [lo, avg, hi] : [avg, hi, lo];
+          return tipBody(c, m.key, valueOf(m), [...lines, ["", t.days(m.n)]]);
         },
       },
       xAxis: {
@@ -729,13 +738,14 @@
       series: [
         {
           type: "custom",
-          data: hist.months.map((m) => [Number(m.key.slice(5)) - 1, yearKeys.indexOf(m.key.slice(0, 4)), m.mean]),
+          data: hist.months.map((m) => [Number(m.key.slice(5)) - 1, yearKeys.indexOf(m.key.slice(0, 4)), valueOf(m)]),
           encode: { x: 0, y: 1 },
           renderItem: (params, api) => {
             const m = hist.months[params.dataIndex];
+            const v = valueOf(m);
             const [cx, cy] = api.coord([api.value(0), api.value(1)]);
             const [w, h] = api.size([1, 1]);
-            const fill = c.bands[bandOf(m.mean)];
+            const fill = c.bands[bandOf(v)];
             // Outline the months in the selected range (all of them for "All" is just noise).
             const picked = !full && overlaps(m, slice);
             return {
@@ -744,7 +754,7 @@
               style: { fill, stroke: picked ? c.text : null, lineWidth: 2 },
               emphasis: { style: { stroke: c.text, lineWidth: 2 } },
               textContent: w >= 24 ? {
-                style: { text: String(Math.round(m.mean)), fill: ink(fill), font: `600 ${narrow ? 10 : 12}px ${mono}` },
+                style: { text: String(Math.round(v)), fill: ink(fill), font: `600 ${narrow ? 10 : 12}px ${mono}` },
               } : undefined,
               textConfig: { position: "inside" },
             };
@@ -824,10 +834,12 @@
     $("zones-sub").textContent = span;
     $("dist-sub").textContent = span;
     $("heat-sub").textContent = `${t.allHistory} · ${touchMode ? t.zoomMonthTouch : t.zoomMonth}`;
+    $("lows-sub").textContent = $("heat-sub").textContent;
     $("years-sub").textContent = `${t.allHistory} · ${touchMode ? t.zoomYearTouch : t.zoomYear}`;
     renderZones(slice);
     renderDist(slice);
-    renderHeat(slice);
+    renderHeat(heat, slice, "mean");
+    renderHeat(lows, slice, "low");
     renderYears(slice);
   }
 
@@ -852,11 +864,13 @@
   function initAnalytics() {
     dist = echarts.init($("dist"), null, { renderer: "canvas" });
     heat = echarts.init($("heat"), null, { renderer: "canvas" });
+    lows = echarts.init($("lows"), null, { renderer: "canvas" });
     years = echarts.init($("years"), null, { renderer: "canvas" });
-    heat.on("click", (p) => {
+    [heat, lows].forEach((ch) => ch.on("click", (p) => {
       const m = hist.months[p.dataIndex];
-      zoomTo(m.key, m.from, m.to);
-    });
+      // Per chart, so a tap on each heatmap doesn't count as a double tap.
+      zoomTo(`${ch.getDom().id}:${m.key}`, m.from, m.to);
+    }));
     // Anywhere in a year's column counts, not just the box.
     years.getZr().on("click", (e) => {
       const at = [e.offsetX, e.offsetY];
@@ -868,7 +882,7 @@
 
   function resizeAnalytics() {
     heatLayout();
-    [dist, heat, years].forEach((ch) => ch.resize());
+    [dist, heat, lows, years].forEach((ch) => ch.resize());
   }
 
   function renderAll() {
