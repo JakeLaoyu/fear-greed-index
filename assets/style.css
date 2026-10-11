@@ -290,7 +290,7 @@ h1 {
 }
 
 #dist { height: 240px; }
-#heat { height: 440px; }
+#heat, #lows { height: 440px; }
 #years { height: 300px; }
 
 .zones {

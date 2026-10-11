@@ -22,6 +22,7 @@ An interactive chart of the CNN Fear & Greed Index from 2011 to today, updated a
   - **Time in each zone**: share of trading days in each zone for the selected range, the longest run in each, and how long the current run has lasted
   - **Score distribution**: a histogram of the selected range, with the latest value's percentile and the median
   - **Monthly average**: a heatmap of every month since 2011, with the selected range outlined; click a month to zoom the chart to it
+  - **Monthly low**: the same heatmap colored by each month's lowest reading, to show how deep the fear went; click a month to zoom to it
   - **By year**: a box plot of each year's readings; click a year to zoom to it
 - English and Chinese, chosen from the browser language (English by default)
 - Dark and light themes that follow the system, and a layout that works on phones
@@ -68,6 +69,7 @@ CNN 恐慌与贪婪指数（Fear & Greed Index）从 2011 年至今的交互式�
   - **各情绪区间占比**：所选区间内每档情绪的交易日占比、最长连续天数，以及当前已连续多少天
   - **读数分布**：所选区间的读数直方图，并给出最新读数的百分位和中位数
   - **月度均值**：2011 年以来每个月的热力图，所选区间会被框出；点击某个月可把主图放大到该月
+  - **月度最低值**：同样的热力图，按每个月的最低读数着色，看出当月恐慌最深到了哪一档；点击某个月可放大到该月
   - **年度分布**：每年读数的箱线图；点击某一年可放大到该年
 - 支持中英文，根据浏览器语言自动选择，无法识别时用英文
 - 深色和浅色主题跟随系统，适配手机
