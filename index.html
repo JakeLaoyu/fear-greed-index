@@ -57,6 +57,41 @@
       </div>
     </section>
 
+    <section class="panels">
+      <article class="panel">
+        <header class="panel-head">
+          <h2 id="zones-title" data-i18n="zonesTitle">Time in each zone</h2>
+          <span class="panel-sub mono" id="zones-sub">&nbsp;</span>
+        </header>
+        <ul class="zones" id="zones" aria-labelledby="zones-title"></ul>
+        <p class="panel-note" id="zones-note">&nbsp;</p>
+      </article>
+      <article class="panel">
+        <header class="panel-head">
+          <h2 id="dist-title" data-i18n="distTitle">Score distribution</h2>
+          <span class="panel-sub mono" id="dist-sub">&nbsp;</span>
+        </header>
+        <div class="mini" id="dist" role="img" aria-labelledby="dist-title"></div>
+        <p class="panel-note" id="dist-note">&nbsp;</p>
+      </article>
+      <article class="panel panel-wide">
+        <header class="panel-head">
+          <h2 id="heat-title" data-i18n="heatTitle">Monthly average</h2>
+          <span class="panel-sub" id="heat-sub">&nbsp;</span>
+        </header>
+        <div id="heat" role="img" aria-labelledby="heat-title"></div>
+        <ul class="legend panel-legend" id="heat-legend"></ul>
+      </article>
+      <article class="panel panel-wide">
+        <header class="panel-head">
+          <h2 id="years-title" data-i18n="yearsTitle">By year</h2>
+          <span class="panel-sub" id="years-sub">&nbsp;</span>
+        </header>
+        <div class="mini" id="years" role="img" aria-labelledby="years-title"></div>
+        <p class="panel-note" data-i18n="yearsNote">Box: middle 50% of days, line: median, whiskers: low and high.</p>
+      </article>
+    </section>
+
     <footer class="foot">
       <span data-i18n="source">Data</span>:
       <a href="https://www.cnn.com/markets/fear-and-greed" target="_blank" rel="noopener">CNN</a>

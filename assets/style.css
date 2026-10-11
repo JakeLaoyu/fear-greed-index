@@ -238,11 +238,113 @@ h1 {
 
 .legend li { display: flex; align-items: center; gap: 7px; }
 
+.panel-legend { margin-top: 12px; font-size: 13px; gap: 6px 16px; }
+
 .legend i {
   width: 12px;
   height: 12px;
   border-radius: 3px;
   display: inline-block;
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  margin-top: 22px;
+}
+
+.panel {
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px 16px;
+}
+
+.panel-wide { grid-column: 1 / -1; }
+
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin-bottom: 14px;
+}
+
+.panel h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.panel-sub { color: var(--muted); font-size: 13px; }
+.panel-sub.mono { font-family: var(--mono); }
+
+.panel-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+#dist { height: 240px; }
+#heat { height: 440px; }
+#years { height: 300px; }
+
+.zones {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0 0;
+  display: grid;
+  gap: 14px;
+}
+
+.zones li {
+  display: grid;
+  grid-template-columns: 8.5em minmax(0, 1fr) 4em;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 3px;
+}
+
+.z-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.z-name i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.z-track { height: 10px; }
+
+.z-track b {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+}
+
+.z-pct {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.z-sub {
+  grid-column: 2 / -1;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
 }
 
 .foot {
@@ -283,4 +385,13 @@ h1 {
   .stat-value { font-size: 22px; }
   .chart-card { padding: 10px 6px 12px; }
   #chart { height: 340px; }
+  .panels { grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 16px; }
+  .panel { padding: 14px 12px 12px; }
+  .panel h2 { font-size: 16px; }
+  .panel-head { margin-bottom: 10px; }
+  .zones li { grid-template-columns: 7.5em minmax(0, 1fr) 3.6em; column-gap: 10px; }
+  .z-name, .z-pct { font-size: 13px; }
+  .z-sub { grid-column: 1 / -1; padding-left: 17px; }
+  #dist { height: 210px; }
+  #years { height: 240px; }
 }
